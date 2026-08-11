@@ -45,11 +45,20 @@ while read -r _lref lsha _rref rsha; do
   CHANGED="$CHANGED$(git diff --name-only "$base".."$lsha" 2>/dev/null || true)"$'\n'
 done
 
-# Fail-safe: brak refow na stdin (hook odpalony recznie) = PELNA bramka.
+# Fail-safe #1: brak refow na stdin (hook odpalony recznie) = PELNA bramka.
+# Fail-safe #2: PUSTA lista plikow = PELNA bramka. Zlapane na wlasnej skorze przy
+#   commicie bootstrapujacym (12.08): dla PIERWSZEGO commita w repo `base` rowna sie
+#   `lsha`, wiec `git diff base..lsha` zwraca pustke — a pusty zbior trywialnie spelnia
+#   "wszystko pasuje do wzorca dokumentacyjnego" i bramka kodu ZNIKALA. Push z .py,
+#   .toml i .yml przeszedl jako "sama dokumentacja". Nieznany zakres = pelna bramka,
+#   nigdy odwrotnie.
 DOC_ONLY=0
 if [ "$SAW_REF" = "1" ]; then
-  NONDOC="$(printf '%s' "$CHANGED" | grep -v '^$' | grep -vE '(\.md$|^docs/|\.txt$)' || true)"
-  [ -z "$NONDOC" ] && DOC_ONLY=1
+  LISTA="$(printf '%s' "$CHANGED" | grep -v '^$' || true)"
+  if [ -n "$LISTA" ]; then
+    NONDOC="$(printf '%s' "$LISTA" | grep -vE '(\.md$|^docs/|\.txt$)' || true)"
+    [ -z "$NONDOC" ] && DOC_ONLY=1
+  fi
 fi
 
 # 1) LOCK

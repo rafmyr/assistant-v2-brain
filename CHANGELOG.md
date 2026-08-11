@@ -19,3 +19,10 @@ Konwencja: wpis przy KAŻDEJ zmianie (K8). Najnowsze na górze.
   stdlib wchodzą świadomie, przez `pyproject.toml`. Wariant A daje granicę miękką,
   ten test jest jej jedynym egzekutorem.
 - Zero kodu funkcjonalnego. Sam szkielet i bramki.
+- **Ruleset „main zawsze zielony" aktywny i udowodniony**: pusty commit na `main`
+  odrzucony (`push declined due to repository rule violations`), `can_bypass: never`.
+- **FIX pre-push, złapany na własnej skórze przy commicie bootstrapującym**: pusta lista
+  plików w zakresie pushu była traktowana jako „sama dokumentacja" i wyłączała mypy+pytest.
+  Dla pierwszego commita w repo `base` równa się `lsha`, więc `git diff` zwracał pustkę,
+  a pusty zbiór trywialnie spełnia warunek „wszystko pasuje do wzorca". Efekt: push
+  z `.py`, `.toml` i `.yml` przeszedł jako dokumentacja. Nieznany zakres = pełna bramka.
