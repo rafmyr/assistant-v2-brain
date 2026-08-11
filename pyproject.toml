@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-brain"
+version = "0.0.1"
+requires-python = ">=3.11"
+description = "Jarvis 2.5 — mozg sesyjny: montaz kontekstu, pamiec relacji, persona, sesje"
+# KONTRAKT A0.13 wariant A: ta paczka jest BIBLIOTEKA instalowana przez `assistant-v2`
+# z gita po tagu. Kontrakt = publiczne API + wersja w `uv.lock` maszynowni.
+# STRZALKA JEST JEDNOKIERUNKOWA: brain NIE zalezy od assistant-v2 i nie wie o jego istnieniu.
+# Dodanie tu czegokolwiek z maszynowni = zlamanie kontraktu, nie decyzja implementacyjna.
+#
+# Zaleznosci celowo puste. `query_agent.py` w assistant-v2 dowiodl, ze cala mechanika
+# spawnu `claude -p` + telemetrii miesci sie na samej bibliotece standardowej (583 LOC,
+# zero importow spoza stdlib) — startujemy z tego samego poziomu i podnosimy swiadomie.
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "mypy>=1.11"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

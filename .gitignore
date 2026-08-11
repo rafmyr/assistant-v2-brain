@@ -1,0 +1,21 @@
+# venv (uv)
+.venv/
+.venv-uv/
+__pycache__/
+*.py[cod]
+
+# narzedzia
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# system
+.DS_Store
+
+# UWAGA: `uv.lock` JEST W REPO SWIADOMIE.
+# W assistant-v2 lock siedzial w .gitignore i to bylo zrodlo 3 dob czerwonego maina
+# (29.07-01.08): trzy srodowiska, trzy wersje zaleznosci, zero zapisu. Lock to jedyne
+# zrodlo prawdy o wersjach — nie wpisuj go tutaj.

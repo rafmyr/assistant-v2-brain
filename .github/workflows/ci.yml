@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Python 3.11
+        run: uv python install 3.11
+      # Lock JEST kontraktem (lekcja assistant-v2, main czerwony 29-30.07: `mcp>=1`
+      # bez locka rozwiazywal zaleznosci od nowa przy kazdym przebiegu i CI testowal
+      # inne paczki niz laptop i niz mini). `--check` wywala CI, gdy ktos ruszyl
+      # pyproject.toml i nie przelockowal.
+      - name: Lock w zgodzie z pyproject
+        run: uv lock --check
+      - name: Install deps (z locka)
+        run: uv sync --frozen --all-groups --python 3.11
+      - name: Lint (ruff)
+        run: uv run --frozen ruff check src/ tests/
+      # BASELINE 0, nie 34 jak w maszynowni. Repo startuje czyste, wiec kazdy blad
+      # typow jest NOWY — bariera bez zapasu od commita pierwszego. Maszynownia
+      # dorabiala ten prog przez dwa miesiace schodzac 52->34; tutaj nie ma czego schodzic.
+      - name: Type check (mypy, baseline 0)
+        run: |
+          CNT=$(uv run --frozen mypy src/ 2>/dev/null | grep -oE 'Found [0-9]+ error' | grep -oE '[0-9]+' || echo 0)
+          echo "mypy errors: ${CNT:-0} (baseline 0)"
+          if [ "${CNT:-0}" -gt 0 ]; then
+            echo "::error::mypy ${CNT} > baseline 0 — regres typow"
+            uv run --frozen mypy src/ | grep -E '^src/.*error:' | tail -20
+            exit 1
+          fi
+      # Zero retry. Lekcja F-0709-1 z maszynowni: `pytest || pytest` maskowal objaw,
+      # nie przyczyne, i przepuscil 2 doby czerwonego maina. Czerwone = czerwone.
+      - name: Tests
+        run: uv run --frozen pytest -q
