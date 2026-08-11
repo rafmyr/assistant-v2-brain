@@ -39,3 +39,11 @@ Konwencja: wpis przy KAŻDEJ zmianie (K8). Najnowsze na górze.
   (kanon nie może kłamać nawet przez jeden dzień).
 - Weryfikacja: `uv lock` wymienił dystrybucję, ruff clean, mypy 0, pytest 2 passed,
   import smoke `assistant_v2_brain.__version__` = 0.0.1.
+
+## 2026-08-12c — WERSJA_KONTRAKTU + v0.0.2
+
+- Pierwszy element publicznego API: `WERSJA_KONTRAKTU = "1.0"`. Wersja KONTRAKTU (A0.13),
+  nie pakietu — rosnie tylko przy lamiacej zmianie powierzchni. Maszynownia sprawdza to
+  przy starcie, bo przy wariancie A granica jest miekka i nic poza umowa jej nie pilnuje
+  w runtime.
+- Wersja pakietu 0.0.1 -> 0.0.2 (pierwsze realne wydanie, sluzy tez za pomiar cyklu).

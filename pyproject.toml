@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "assistant-v2-brain"
-version = "0.0.1"
+version = "0.0.2"
 requires-python = ">=3.11"
 description = "Jarvis 2.5 — mozg sesyjny: montaz kontekstu, pamiec relacji, persona, sesje"
 # KONTRAKT A0.13 wariant A: ta paczka jest BIBLIOTEKA instalowana przez `assistant-v2`

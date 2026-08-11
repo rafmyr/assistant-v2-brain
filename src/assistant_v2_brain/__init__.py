@@ -16,6 +16,12 @@ Dane wejsciowe i wysylka naleza do maszynowni; mozg dostaje kontekst i zwraca tr
 
 from __future__ import annotations
 
-__all__ = ["__version__"]
+__all__ = ["WERSJA_KONTRAKTU", "__version__"]
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
+
+# Wersja KONTRAKTU (A0.13), nie pakietu. Rosnie tylko przy lamiacej zmianie powierzchni
+# miedzy mozgiem a maszynownia — wersja pakietu rusza sie znacznie czesciej.
+# Maszynownia sprawdza to przy starcie: rozjazd = jawny blad zamiast cichej niezgodnosci.
+# Powod: przy wariancie A granica jest miekka i nic poza umowa jej nie pilnuje w runtime.
+WERSJA_KONTRAKTU = "1.0"
