@@ -6,7 +6,7 @@
 
 ## Czym to repo jest
 
-Mózg sesyjny Jarvisa 2.5 jako **biblioteka** (`jarvis_brain`), konsumowana przez
+Mózg sesyjny Jarvisa 2.5 jako **biblioteka** (`assistant_v2_brain`), konsumowana przez
 `assistant-v2` przez pin w `uv.lock`. Nie usługa, nie proces, nie serwer MCP.
 
 **Kanon**: `README.md` (konstytucja K3/K5/K8/K9 + B1-B5) ·

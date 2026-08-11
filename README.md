@@ -1,6 +1,6 @@
 # assistant-v2-brain — mózg sesyjny Jarvisa 2.5
 
-> Pakiet Pythona `jarvis_brain`. Biblioteka, nie usługa.
+> Pakiet Pythona `assistant_v2_brain`. Biblioteka, nie usługa.
 > Konsument: `assistant-v2` (maszynownia), przez zależność pinowaną w `uv.lock`.
 > Powstało 12.08.2026 z decyzji PO D-A (plan `assistant-v2/docs/PLAN-JARVIS-2.5-2026-08-11.md` v1.2).
 

@@ -31,7 +31,7 @@ def _wszystkie_importy() -> set[str]:
 
 
 def test_brain_nie_importuje_maszynowni() -> None:
-    """Strzalka jest jednokierunkowa: assistant-v2 -> jarvis_brain, nigdy odwrotnie."""
+    """Strzalka jest jednokierunkowa: assistant-v2 -> assistant_v2_brain, nigdy odwrotnie."""
     naruszenia = _wszystkie_importy() & ZAKAZANE
     assert not naruszenia, (
         f"KONTRAKT A0.13 ZLAMANY: brain importuje z maszynowni: {sorted(naruszenia)}. "
@@ -45,7 +45,7 @@ def test_brain_stoi_na_stdlib() -> None:
     Startujemy z pustego `dependencies` (wzor: reasoner, 583 LOC na samym stdlib).
     Ten test pilnuje, ze nowa zaleznosc pojawia sie razem z wpisem w pyproject.
     """
-    zadeklarowane = {"jarvis_brain"} | set(sys.stdlib_module_names)
+    zadeklarowane = {"assistant_v2_brain"} | set(sys.stdlib_module_names)
     obce = {k for k in _wszystkie_importy() if k not in zadeklarowane}
     assert not obce, (
         f"Import spoza stdlib bez wpisu w pyproject.toml: {sorted(obce)}. "
