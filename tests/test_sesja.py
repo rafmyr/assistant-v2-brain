@@ -59,9 +59,7 @@ def test_prompt_zawiera_wszystkie_cztery_zrodla() -> None:
 
 def test_braki_zrodel_trafiaja_do_promptu_jako_polecenie_powiedzenia_wprost() -> None:
     """Runtime-gate A1.3: koniec cichej degradacji do pewnie brzmiącego czatu bez danych."""
-    out = zbuduj_prompt_systemowy(
-        DaneWejsciowe(persona="x", braki=("kalendarz nie odpowiada",))
-    )
+    out = zbuduj_prompt_systemowy(DaneWejsciowe(persona="x", braki=("kalendarz nie odpowiada",)))
     assert "kalendarz nie odpowiada" in out
     assert "Powiedz o tym wprost" in out
 
@@ -144,6 +142,52 @@ def test_blad_sesji_kasuje_id_zeby_kolejna_proba_zaczela_od_nowa(tmp_path: Path)
     with pytest.raises(BladSesji):
         asyncio.run(mozg.odpowiedz("x", "w", "p"))
     assert mozg.sesje.pobierz(klucz) is None
+
+
+def test_is_error_przy_exit_0_to_awaria_a_nie_tresc_odpowiedzi(tmp_path: Path) -> None:
+    """Regresja zmierzona na prodzie 12.08: wygasly token = exit 0 + poprawny JSON.
+
+    CLI ustawia `subtype: success` i wpisuje komunikat bledu w pole `result`. Bez tego
+    sprawdzenia awaria autoryzacji poszlaby do PO jako wiadomosc od Jarvisa (brief poranny),
+    a fallback na stara sciezke nie odpalilby sie, bo nie byloby wyjatku.
+    """
+    ladunek = json.dumps(
+        {
+            "is_error": True,
+            "subtype": "success",
+            "api_error_status": 401,
+            "session_id": "f9b41c75",
+            "result": "Failed to authenticate. API Error: 401 OAuth access token has expired.",
+            "total_cost_usd": 0,
+            "num_turns": 1,
+        }
+    )
+
+    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+        return 0, ladunek, ""
+
+    mozg = _mozg(runner, tmp_path)
+    with pytest.raises(BladSesji, match="HTTP 401"):
+        asyncio.run(mozg.odpowiedz("x", "w", "p"))
+
+
+def test_ostrzezenie_cli_nie_przeslania_prawdziwej_przyczyny(tmp_path: Path) -> None:
+    """Ostrzezenia wypadaja przed bledem; branie pierwszej linii dawalo mylna diagnoze."""
+
+    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+        return 1, "", "Warning: no stdin data received in 3s\nprawdziwa przyczyna awarii"
+
+    mozg = _mozg(runner, tmp_path)
+    with pytest.raises(BladSesji, match="prawdziwa przyczyna awarii"):
+        asyncio.run(mozg.odpowiedz("x", "w", "p"))
+
+
+def test_stdin_jest_zamkniety_zeby_cli_nie_czekalo(tmp_path: Path) -> None:
+    """Otwarty deskryptor = 3 s czekania w KAZDYM wywolaniu pod launchd."""
+    src = (
+        Path(__file__).resolve().parent.parent / "src" / "assistant_v2_brain" / "sesja.py"
+    ).read_text(encoding="utf-8")
+    assert "stdin=asyncio.subprocess.DEVNULL" in src
 
 
 def test_pusta_odpowiedz_to_blad_a_nie_cisza_do_PO(tmp_path: Path) -> None:

@@ -99,8 +99,14 @@ RunnerFn = Callable[[list[str], float], Awaitable[tuple[int, str, str]]]
 
 
 async def _uruchom(argv: list[str], timeout_s: float) -> tuple[int, str, str]:
+    # stdin=DEVNULL, bo CLI czeka 3 s na dane wejsciowe i dokleja ostrzezenie do stderr,
+    # jesli deskryptor jest otwarty. Pod launchd to strata 3 s w kazdym wywolaniu,
+    # a pod SSH ostrzezenie ladowalo w diagnozie zamiast prawdziwej przyczyny.
     proc = await asyncio.create_subprocess_exec(
-        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        *argv,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
@@ -167,8 +173,14 @@ class MozgSesyjny:
             if kod != 0:
                 # NAJPIERW kod wyjścia, dopiero potem JSON — przy błędzie CLI zwraca goły tekst
                 # i `json.loads` dałoby JSONDecodeError zamiast diagnozy (scenariusz 2).
-                komunikat = (err or out).strip().splitlines()
-                powod = komunikat[0] if komunikat else f"exit {kod}"
+                # Ostrzeżenia CLI (np. o stdin) wypadają PRZED właściwym błędem, więc branie
+                # pierwszej linii pokazywało w diagnozie nie tę awarię, która wystąpiła.
+                linie = [
+                    lin.strip()
+                    for lin in (err or out).strip().splitlines()
+                    if lin.strip() and not lin.strip().startswith("Warning:")
+                ]
+                powod = linie[0] if linie else f"exit {kod}"
                 if sid is not None:
                     self.sesje.zapomnij(klucz)
                 raise BladSesji(f"claude -p zakończył się błędem: {powod}")
@@ -177,6 +189,19 @@ class MozgSesyjny:
                 dane = json.loads(out)
             except json.JSONDecodeError as exc:
                 raise BladSesji(f"odpowiedź nie jest JSON-em mimo exit 0: {exc}") from exc
+
+            # Kod wyjścia NIE WYSTARCZA. Zmierzone na prodzie 12.08 przy wygasłym tokenie:
+            # exit 0, poprawny JSON, `subtype: success` — i komunikat błędu API wpisany
+            # w pole `result`. Bez tego sprawdzenia awaria autoryzacji wychodzi do PO jako
+            # treść wiadomości od Jarvisa, a fallback na starą ścieżkę się NIE odpala,
+            # bo nie ma wyjątku. Pole `is_error` jest jedynym wiarygodnym sygnałem.
+            if dane.get("is_error"):
+                status = dane.get("api_error_status")
+                opis = str(dane.get("result") or "").strip() or "bez opisu"
+                sufiks = f" (HTTP {status})" if status else ""
+                if sid is not None:
+                    self.sesje.zapomnij(klucz)
+                raise BladSesji(f"CLI zgłosiło błąd mimo exit 0{sufiks}: {opis}")
 
             tresc = str(dane.get("result") or "").strip()
             if not tresc:
