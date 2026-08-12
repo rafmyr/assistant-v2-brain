@@ -20,7 +20,7 @@ from assistant_v2_brain.kontekst import (
     Tura,
     zbuduj_prompt_systemowy,
 )
-from assistant_v2_brain.sesja import BladSesji, MozgSesyjny, klucz_sesji
+from assistant_v2_brain.sesja import BladSesji, MozgSesyjny, klucz_sesji, wyluskaj_json
 
 
 def _odp(result: str = "ok", sid: str = "sid-1", koszt: float = 0.01, tury: int = 1) -> str:
@@ -31,6 +31,78 @@ def _odp(result: str = "ok", sid: str = "sid-1", koszt: float = 0.01, tury: int 
 
 def _mozg(runner, tmp_path: Path) -> MozgSesyjny:
     return MozgSesyjny(katalog_roboczy=tmp_path, runner=runner, claude_bin="/bin/echo")
+
+
+# --- tryb strukturalny (dla ścieżek egzekwujących kontrakt w kodzie, np. Plaud) -----
+
+
+def test_wyluskaj_json_radzi_sobie_z_plotkiem_markdown() -> None:
+    """Model bywa uprzejmy i opakowuje wynik. Zakaz w prompcie nie jest egzekwowany
+    niczym, więc radzimy sobie w kodzie."""
+    assert wyluskaj_json('```json\n{"a": 1}\n```') == {"a": 1}
+    assert wyluskaj_json('Prosze bardzo:\n{"a": 1}') == {"a": 1}
+    assert wyluskaj_json('{"a": 1}') == {"a": 1}
+
+
+def test_wyluskaj_json_odrzuca_tablice_i_smiec() -> None:
+    """Tablica i proza lecą tą samą ścieżką: parser szuka OBIEKTU, a nie znajdując
+    klamry mówi to wprost, zamiast zwrócić coś, czego walidator nie zrozumie."""
+    with pytest.raises(BladSesji, match="nie ma obiektu JSON"):
+        wyluskaj_json("[1, 2, 3]")
+    with pytest.raises(BladSesji, match="nie ma obiektu JSON"):
+        wyluskaj_json("model sie rozgadal i nic nie zwrocil")
+
+
+def test_struktura_niepoprawna_jest_poprawiana_w_drugiej_probie(tmp_path: Path) -> None:
+    """Poprawka idzie jako kolejna TURA tej samej sesji — model widzi własną odpowiedź
+    i komunikat walidatora, więc poprawia konkret, a nie zgaduje od zera."""
+    odpowiedzi = ['{"kto": "brak pola daty"}', '{"kto": "Michal", "data": "2026-08-13"}']
+    pytania: list[str] = []
+
+    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+        pytania.append(argv[2])
+        return 0, _odp(result=odpowiedzi[len(pytania) - 1]), ""
+
+    def walidator(dane: dict) -> None:
+        if "data" not in dane:
+            raise ValueError("brakuje pola: data")
+
+    mozg = _mozg(runner, tmp_path)
+    dane, _ = asyncio.run(mozg.odpowiedz_ze_struktura("wyciagnij", "w", "p", walidator=walidator))
+
+    assert dane == {"kto": "Michal", "data": "2026-08-13"}
+    assert len(pytania) == 2
+    assert "brakuje pola: data" in pytania[1]
+
+
+def test_struktura_po_wyczerpaniu_prob_to_blad_a_nie_polprodukt(tmp_path: Path) -> None:
+    """Zwrócenie niezwalidowanej struktury byłoby gorsze niż awaria: ścieżki Plaud
+    PISZĄ pliki do vaulta, więc półprodukt zostawiłby śmieć na dysku."""
+
+    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+        return 0, _odp(result='{"zawsze": "zle"}'), ""
+
+    def walidator(dane: dict) -> None:
+        raise ValueError("nigdy nie przejdzie")
+
+    mozg = _mozg(runner, tmp_path)
+    with pytest.raises(BladSesji, match="po 2 próbach"):
+        asyncio.run(mozg.odpowiedz_ze_struktura("x", "w", "p", walidator=walidator))
+
+
+def test_walidator_moze_rzucic_czymkolwiek(tmp_path: Path) -> None:
+    """Walidator jest CUDZY (jsonschema z maszynowni) — łapiemy każdy wyjątek, bo
+    inaczej obcy typ błędu przeleciałby obok fallbacku maszynowni."""
+
+    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+        return 0, _odp(result='{"a": 1}'), ""
+
+    def walidator(dane: dict) -> None:
+        raise KeyError("egzotyczny wyjatek biblioteki")
+
+    mozg = _mozg(runner, tmp_path)
+    with pytest.raises(BladSesji, match="KeyError"):
+        asyncio.run(mozg.odpowiedz_ze_struktura("x", "w", "p", walidator=walidator, proby=1))
 
 
 # --- montaż kontekstu -------------------------------------------------------------

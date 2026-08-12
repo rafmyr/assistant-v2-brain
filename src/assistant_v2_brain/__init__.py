@@ -28,6 +28,7 @@ from assistant_v2_brain.sesja import (
     WynikSesji,
     katalog_roboczy_z_env,
     klucz_sesji,
+    wyluskaj_json,
 )
 
 __all__ = [
@@ -41,10 +42,11 @@ __all__ = [
     "__version__",
     "katalog_roboczy_z_env",
     "klucz_sesji",
+    "wyluskaj_json",
     "zbuduj_prompt_systemowy",
 ]
 
-__version__ = "0.0.2"
+__version__ = "0.2.0"
 
 # Wersja KONTRAKTU (A0.13), nie pakietu. Rosnie tylko przy lamiacej zmianie powierzchni
 # miedzy mozgiem a maszynownia — wersja pakietu rusza sie znacznie czesciej.

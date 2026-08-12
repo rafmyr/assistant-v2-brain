@@ -30,6 +30,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 TIMEOUT_S = 180.0  # macierz A0.2 §8: kompaktowanie potrafi trwać 89 s; 60 s ucinało w pół zdania
 BUDZET_USD = 0.60  # K5; przekroczenie = twardy błąd CLI, nie cichy koszt
@@ -117,6 +118,36 @@ async def _uruchom(argv: list[str], timeout_s: float) -> tuple[int, str, str]:
     return proc.returncode or 0, out.decode(errors="replace"), err.decode(errors="replace")
 
 
+def wyluskaj_json(tekst: str) -> dict[str, Any]:
+    """Wydobywa obiekt JSON z odpowiedzi modelu.
+
+    Model bywa uprzejmy: opakowuje wynik w blok markdown albo dokleja zdanie wstępne.
+    Zamiast zakazywać mu tego w prompcie — zakaz bez egzekutora jest życzeniem —
+    radzimy sobie z tym w kodzie.
+    """
+    surowy = tekst.strip()
+    if surowy.startswith("```"):
+        linie = surowy.splitlines()[1:]  # otwierający płotek, czasem z nazwą języka
+        if linie and linie[-1].strip().startswith("```"):
+            linie = linie[:-1]
+        surowy = "\n".join(linie).strip()
+    if not surowy.startswith("{"):
+        poczatek, koniec = surowy.find("{"), surowy.rfind("}")
+        if poczatek == -1 or koniec <= poczatek:
+            raise BladSesji(f"w odpowiedzi nie ma obiektu JSON: {surowy[:120]}")
+        surowy = surowy[poczatek : koniec + 1]
+    try:
+        dane = json.loads(surowy)
+    except json.JSONDecodeError as exc:
+        raise BladSesji(f"odpowiedź nie jest poprawnym JSON-em: {exc}") from exc
+    if not isinstance(dane, dict):
+        # Praktycznie nieosiągalne (wyżej wycinamy fragment od `{` do `}`), ale to jest
+        # miejsce, w którym `Any` z `json.loads` zamienia się w konkretny typ — bez tego
+        # zwracalibyśmy `Any` udające `dict`, co mypy słusznie odrzuca.
+        raise BladSesji(f"oczekiwano obiektu JSON, jest {type(dane).__name__}")
+    return dane
+
+
 class MozgSesyjny:
     """Prowadzi rozmowę w jednym wątku. Jedna instancja na proces."""
 
@@ -152,6 +183,58 @@ class MozgSesyjny:
         if self._profil is not None:
             argv += ["--mcp-config", str(self._profil), "--strict-mcp-config"]
         return argv
+
+    async def odpowiedz_ze_struktura(
+        self,
+        wiadomosc: str,
+        watek: str,
+        prompt_systemowy: str,
+        *,
+        walidator: Callable[[dict[str, Any]], None],
+        proby: int = 2,
+        dzien: date | None = None,
+    ) -> tuple[dict[str, Any], WynikSesji]:
+        """Odpowiedź, która MUSI być strukturą przechodzącą walidację.
+
+        Po co: ścieżki takie jak ekstrakcja z nagrań Plaud egzekwują kontrakt w KODZIE
+        (`jsonschema`), a nie w prompcie. Bez tego trybu mózg nie może ich obsłużyć —
+        `odpowiedz()` zwraca prozę.
+
+        Dlaczego walidator jest WSTRZYKIWANY, a nie zaszyty tutaj: ta biblioteka ma zero
+        zależności spoza stdlib i tak ma zostać (kontrakt A0.13). `jsonschema` mieszka
+        w maszynowni, więc to ona podaje funkcję sprawdzającą; my odpowiadamy wyłącznie
+        za pętlę prób.
+
+        Poprawka leci jako KOLEJNA TURA tej samej sesji, nie jako nowe pytanie — model
+        widzi własną odpowiedź i komunikat walidatora, więc poprawia konkret zamiast
+        zgadywać od zera.
+        """
+        if proby < 1:
+            raise ValueError("proby musi być >= 1")
+
+        ostatni_blad = ""
+        tresc_prosby = wiadomosc
+        for nr in range(1, proby + 1):
+            wynik = await self.odpowiedz(tresc_prosby, watek, prompt_systemowy, dzien=dzien)
+            try:
+                dane = wyluskaj_json(wynik.tresc)
+                walidator(dane)
+            except BladSesji as exc:
+                ostatni_blad = str(exc)
+            except Exception as exc:  # noqa: BLE001 — walidator jest cudzy, może rzucić czymkolwiek
+                ostatni_blad = f"{type(exc).__name__}: {exc}"
+            else:
+                return dane, wynik
+
+            if nr < proby:
+                tresc_prosby = (
+                    "Twoja poprzednia odpowiedź nie przeszła walidacji: "
+                    f"{ostatni_blad}\n\n"
+                    "Odpowiedz PONOWNIE, wyłącznie obiektem JSON zgodnym ze schematem. "
+                    "Bez komentarza przed ani po, bez bloku markdown."
+                )
+
+        raise BladSesji(f"struktura nie przeszła walidacji po {proby} próbach: {ostatni_blad}")
 
     async def odpowiedz(
         self, wiadomosc: str, watek: str, prompt_systemowy: str, *, dzien: date | None = None
