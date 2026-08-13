@@ -46,7 +46,7 @@ __all__ = [
     "zbuduj_prompt_systemowy",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # Wersja KONTRAKTU (A0.13), nie pakietu. Rosnie tylko przy lamiacej zmianie powierzchni
 # miedzy mozgiem a maszynownia — wersja pakietu rusza sie znacznie czesciej.

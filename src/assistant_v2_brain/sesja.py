@@ -96,15 +96,23 @@ def _transkrypt_istnieje(session_id: str, cwd: Path) -> bool:
         return False
 
 
-RunnerFn = Callable[[list[str], float], Awaitable[tuple[int, str, str]]]
+RunnerFn = Callable[[list[str], float, Path], Awaitable[tuple[int, str, str]]]
 
 
-async def _uruchom(argv: list[str], timeout_s: float) -> tuple[int, str, str]:
+async def _uruchom(argv: list[str], timeout_s: float, cwd: Path) -> tuple[int, str, str]:
     # stdin=DEVNULL, bo CLI czeka 3 s na dane wejsciowe i dokleja ostrzezenie do stderr,
     # jesli deskryptor jest otwarty. Pod launchd to strata 3 s w kazdym wywolaniu,
     # a pod SSH ostrzezenie ladowalo w diagnozie zamiast prawdziwej przyczyny.
+    # cwd JEST OBOWIĄZKOWE. CLI zapisuje transkrypt do katalogu wyliczonego ze SWOJEGO
+    # katalogu roboczego; bez tego proces dziedziczył cwd rodzica (serve), transkrypty
+    # lądowały pod innym slugiem niż ten, którego szuka `_transkrypt_istnieje`, więc
+    # KAŻDA wiadomość startowała nową sesję (`wznowiona=False`) i rozmowa nie miała
+    # historii. Zmierzone na prodzie 13.08: 6 wiadomości pod rząd, 6 różnych session_id,
+    # a model odpowiadał „początek rozmowy jest pusty" na własne pytanie sprzed 10 sekund.
+    cwd.mkdir(parents=True, exist_ok=True)
     proc = await asyncio.create_subprocess_exec(
         *argv,
+        cwd=str(cwd),
         stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -250,7 +258,7 @@ class MozgSesyjny:
                 sid = None
 
             kod, out, err = await self._runner(
-                self._argv(wiadomosc, prompt_systemowy, sid), self._timeout
+                self._argv(wiadomosc, prompt_systemowy, sid), self._timeout, self._cwd
             )
 
             if kod != 0:

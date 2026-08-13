@@ -33,6 +33,33 @@ def _mozg(runner, tmp_path: Path) -> MozgSesyjny:
     return MozgSesyjny(katalog_roboczy=tmp_path, runner=runner, claude_bin="/bin/echo")
 
 
+@pytest.mark.asyncio
+async def test_runner_dostaje_katalog_roboczy_sesji() -> None:
+    """REGRESJA 13.08 (incydent na prodzie): proces `claude -p` startował BEZ `cwd`,
+    więc dziedziczył katalog rodzica (serve). CLI zapisuje transkrypt pod slugiem
+    wyliczonym z WŁASNEGO cwd, a `_transkrypt_istnieje` szukał go pod slugiem
+    `katalog_roboczy` — trafienie było niemożliwe.
+
+    Skutek u PO: 6 wiadomości pod rząd = 6 różnych `session_id`, `wznowiona=False`
+    za każdym razem, a model odpowiadał „początek rozmowy jest pusty" na własne
+    pytanie sprzed 10 sekund. Rozmowa bez historii jest gorsza niż brak mózgu.
+    """
+    import tempfile
+
+    widziane: list[Path] = []
+
+    async def runner(argv, timeout, cwd):  # noqa: ANN001, ARG001
+        widziane.append(cwd)
+        return 0, _odp(), ""
+
+    with tempfile.TemporaryDirectory() as td:
+        katalog = Path(td) / "brain"
+        mozg = MozgSesyjny(katalog_roboczy=katalog, runner=runner, claude_bin="/bin/echo")
+        await mozg.odpowiedz("czesc", "w", "p")
+
+    assert widziane == [katalog], "runner MUSI dostać katalog roboczy sesji"
+
+
 # --- tryb strukturalny (dla ścieżek egzekwujących kontrakt w kodzie, np. Plaud) -----
 
 
@@ -59,7 +86,7 @@ def test_struktura_niepoprawna_jest_poprawiana_w_drugiej_probie(tmp_path: Path) 
     odpowiedzi = ['{"kto": "brak pola daty"}', '{"kto": "Michal", "data": "2026-08-13"}']
     pytania: list[str] = []
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         pytania.append(argv[2])
         return 0, _odp(result=odpowiedzi[len(pytania) - 1]), ""
 
@@ -79,7 +106,7 @@ def test_struktura_po_wyczerpaniu_prob_to_blad_a_nie_polprodukt(tmp_path: Path) 
     """Zwrócenie niezwalidowanej struktury byłoby gorsze niż awaria: ścieżki Plaud
     PISZĄ pliki do vaulta, więc półprodukt zostawiłby śmieć na dysku."""
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 0, _odp(result='{"zawsze": "zle"}'), ""
 
     def walidator(dane: dict) -> None:
@@ -94,7 +121,7 @@ def test_walidator_moze_rzucic_czymkolwiek(tmp_path: Path) -> None:
     """Walidator jest CUDZY (jsonschema z maszynowni) — łapiemy każdy wyjątek, bo
     inaczej obcy typ błędu przeleciałby obok fallbacku maszynowni."""
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 0, _odp(result='{"a": 1}'), ""
 
     def walidator(dane: dict) -> None:
@@ -149,7 +176,7 @@ def test_s5_dwa_rownolegle_wywolania_w_jednym_watku_sa_serializowane(tmp_path: P
     rownoczesne = 0
     szczyt = 0
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         nonlocal rownoczesne, szczyt
         rownoczesne += 1
         szczyt = max(szczyt, rownoczesne)
@@ -172,7 +199,7 @@ def test_rozne_watki_nie_blokuja_sie_nawzajem(tmp_path: Path) -> None:
     rownoczesne = 0
     szczyt = 0
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         nonlocal rownoczesne, szczyt
         rownoczesne += 1
         szczyt = max(szczyt, rownoczesne)
@@ -193,7 +220,7 @@ def test_rozne_watki_nie_blokuja_sie_nawzajem(tmp_path: Path) -> None:
 def test_s2_blad_cli_z_golym_tekstem_nie_wywraca_sie_na_json(tmp_path: Path) -> None:
     """Przy nieznanym session_id CLI łamie własny kontrakt --output-format json."""
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 1, "No conversation found with session ID: 000", ""
 
     mozg = _mozg(runner, tmp_path)
@@ -207,7 +234,7 @@ def test_blad_sesji_kasuje_id_zeby_kolejna_proba_zaczela_od_nowa(tmp_path: Path)
     mozg.sesje.zapamietaj(klucz, "stare-id")
     (tmp_path / "x").write_text("")  # transkryptu i tak nie ma → id zostanie wyczyszczone
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 2, "", "cokolwiek padlo"
 
     mozg._runner = runner  # noqa: SLF001 — celowo, to test jednostkowy
@@ -235,7 +262,7 @@ def test_is_error_przy_exit_0_to_awaria_a_nie_tresc_odpowiedzi(tmp_path: Path) -
         }
     )
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 0, ladunek, ""
 
     mozg = _mozg(runner, tmp_path)
@@ -246,7 +273,7 @@ def test_is_error_przy_exit_0_to_awaria_a_nie_tresc_odpowiedzi(tmp_path: Path) -
 def test_ostrzezenie_cli_nie_przeslania_prawdziwej_przyczyny(tmp_path: Path) -> None:
     """Ostrzezenia wypadaja przed bledem; branie pierwszej linii dawalo mylna diagnoze."""
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 1, "", "Warning: no stdin data received in 3s\nprawdziwa przyczyna awarii"
 
     mozg = _mozg(runner, tmp_path)
@@ -263,7 +290,7 @@ def test_stdin_jest_zamkniety_zeby_cli_nie_czekalo(tmp_path: Path) -> None:
 
 
 def test_pusta_odpowiedz_to_blad_a_nie_cisza_do_PO(tmp_path: Path) -> None:
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         return 0, _odp(result="   "), ""
 
     mozg = _mozg(runner, tmp_path)
@@ -275,7 +302,7 @@ def test_pierwsze_wywolanie_niesie_persone_wznowienie_juz_nie(tmp_path: Path) ->
     """Persona jest w transkrypcie po starcie; powtarzanie jej dokładałoby kontekst co turę."""
     argvy: list[list[str]] = []
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         argvy.append(argv)
         return 0, _odp(sid="sid-abc"), ""
 
@@ -303,7 +330,7 @@ def test_budzet_jest_w_kazdym_wywolaniu(tmp_path: Path) -> None:
     """K5: zimne wznowienie przy 320k kontekstu kosztowało $1,91 za jedną wiadomość."""
     argvy: list[list[str]] = []
 
-    async def runner(argv, timeout):  # noqa: ANN001, ARG001
+    async def runner(argv, timeout, cwd=None):  # noqa: ANN001, ARG001
         argvy.append(argv)
         return 0, _odp(), ""
 
