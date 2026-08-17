@@ -12,9 +12,9 @@ description = "Jarvis 2.5 — mozg sesyjny: montaz kontekstu, pamiec relacji, pe
 # STRZALKA JEST JEDNOKIERUNKOWA: brain NIE zalezy od assistant-v2 i nie wie o jego istnieniu.
 # Dodanie tu czegokolwiek z maszynowni = zlamanie kontraktu, nie decyzja implementacyjna.
 #
-# Zaleznosci celowo puste. `query_agent.py` w assistant-v2 dowiodl, ze cala mechanika
-# spawnu `claude -p` + telemetrii miesci sie na samej bibliotece standardowej (583 LOC,
-# zero importow spoza stdlib) — startujemy z tego samego poziomu i podnosimy swiadomie.
+# Zaleznosci celowo puste. Rownolegly modul w maszynowni dowiodl, ze cala mechanika
+# spawnu `claude -p` + telemetrii miesci sie na samej bibliotece standardowej (kilkaset
+# LOC, zero importow spoza stdlib) — startujemy z tego samego poziomu i podnosimy swiadomie.
 dependencies = []
 
 [dependency-groups]
