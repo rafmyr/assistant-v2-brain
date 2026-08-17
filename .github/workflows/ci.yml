@@ -17,9 +17,9 @@ jobs:
           enable-cache: true
       - name: Python 3.11
         run: uv python install 3.11
-      # Lock JEST kontraktem (lekcja assistant-v2, main czerwony 29-30.07: `mcp>=1`
+      # Lock JEST kontraktem (lekcja z maszynowni, main czerwony przez doby: `mcp>=1`
       # bez locka rozwiazywal zaleznosci od nowa przy kazdym przebiegu i CI testowal
-      # inne paczki niz laptop i niz mini). `--check` wywala CI, gdy ktos ruszyl
+      # inne paczki niz maszyna dev i niz prod). `--check` wywala CI, gdy ktos ruszyl
       # pyproject.toml i nie przelockowal.
       - name: Lock w zgodzie z pyproject
         run: uv lock --check
@@ -39,6 +39,11 @@ jobs:
             uv run --frozen mypy src/ | grep -E '^src/.*error:' | tail -20
             exit 1
           fi
+      # Osobny krok, chociaz `pytest` ponizej i tak go obejmuje. Powod: gdy CI padnie
+      # na wycieku, komunikat ma to mowic wprost w nazwie kroku, a nie ginac wsrod
+      # kilkudziesieciu testow. To repo jest publiczne, jego konsument nie jest.
+      - name: Skan wyciekow (repo publiczne)
+        run: uv run --frozen pytest tests/test_brak_wyciekow.py -q
       # Zero retry. Lekcja F-0709-1 z maszynowni: `pytest || pytest` maskowal objaw,
       # nie przyczyne, i przepuscil 2 doby czerwonego maina. Czerwone = czerwone.
       - name: Tests

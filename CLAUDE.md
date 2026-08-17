@@ -1,17 +1,31 @@
 # CLAUDE.md — working memory assistant-v2-brain
 
 > Czytaj na początku KAŻDEJ sesji w tym repo. **Limit: 120 linii.**
-> Przekroczenie = najpierw wytnij, potem dopisz (precedens F-0726-8 w maszynowni:
-> plik urósł do 1236 linii przy deklarowanym limicie 80, łamanym 15-krotnie).
+> Przekroczenie = najpierw wytnij, potem dopisz (precedens z maszynowni: plik urósł do
+> 1236 linii przy deklarowanym limicie 80, łamanym 15-krotnie, i nikt tego nie zobaczył).
+
+## ⚠️ TO REPO JEST PUBLICZNE, JEGO KONSUMENT NIE JEST
+
+Wszystko, co tu wpiszesz, czyta cały świat. Nie przenoś tu z repo prywatnych: nazw plików
+i modułów, identyfikatorów findingów, opisów incydentów produkcyjnych, nazw mechanizmów
+nadzoru. Nie wklejaj danych osobowych, ścieżek z własnego terminala, hostów sieci domowej
+ani nazw klientów — także do fixture'ów testowych, bo tam trafiają najłatwiej.
+
+Egzekutor: `tests/test_brak_wyciekow.py`. W `pre-push` stoi **poza** warstwowością
+dokumentacyjną, czyli biegnie także wtedy, gdy pushujesz sam plik `.md`. Tak ma być:
+dokumentacja jest najbardziej prawdopodobnym nośnikiem wycieku, więc bramka pomijana
+dla `.md` byłaby bramką wyłączoną dokładnie tam, gdzie jest potrzebna.
+
+Skan nie widzi historii gita. Sekret raz zacommitowany zostaje w historii nawet po
+usunięciu z drzewa — wtedy potrzebny jest rewrite historii, nie kolejny commit.
 
 ## Czym to repo jest
 
 Mózg sesyjny Jarvisa 2.5 jako **biblioteka** (`assistant_v2_brain`), konsumowana przez
-`assistant-v2` przez pin w `uv.lock`. Nie usługa, nie proces, nie serwer MCP.
+maszynownię przez pin w `uv.lock`. Nie usługa, nie proces, nie serwer MCP.
 
-**Kanon**: `README.md` (konstytucja K3/K5/K8/K9 + B1-B5) ·
-`assistant-v2/docs/KONTRAKT-BRAIN-MASZYNOWNIA.md` (granica, wariant A) ·
-`assistant-v2/docs/PLAN-JARVIS-2.5-2026-08-11.md` v1.2 (tor A, etapy A0-A4).
+**Kanon**: `README.md` (konstytucja K3/K5/K8/K9 + B1-B5) · dokument kontraktu granicy
+(wariant A) i plan toru A — oba po stronie maszynowni.
 
 ## Start sesji
 
@@ -25,20 +39,19 @@ gh pr list
 (`can_bypass: never`), więc `git push origin main` zostanie odrzucony — każda zmiana
 idzie przez branch + PR + zielony `lint-and-test`.
 
-Praca na styku z maszynownią = przeczytaj też `assistant-v2/CLAUDE.md`, ale **zacznij
-od repo zadania**. Precedens: równoległe sesje w jednym klonie (18.07) skończyły się
-commitem na cudzym branchu.
+Praca na styku z maszynownią = przeczytaj też jej working memory, ale **zacznij od repo
+zadania**. Precedens: równoległe sesje w jednym klonie skończyły się commitem na cudzym
+branchu.
 
 ## Granica — jedyna reguła, której złamanie psuje wszystko
 
-Ten pakiet **nie importuje niczego z `assistant-v2`**. Dane wejściowe dostaje
-w argumencie; wysyłkę, mutacje i konektory robi maszynownia. Mózg **proponuje** akcję,
-nie wykonuje jej.
+Ten pakiet **nie importuje niczego z maszynowni**. Dane wejściowe dostaje w argumencie;
+wysyłkę, mutacje i konektory robi maszynownia. Mózg **proponuje** akcję, nie wykonuje jej.
 
 Egzekutor: `tests/test_granica_kontraktu.py` (AST, nie grep — komentarz go nie oszuka).
 Wariant A daje granicę miękką i ten test jest jej jedynym strażnikiem. Jeśli kiedyś
 zacznie przeszkadzać, to jest sygnał, że kontrakt się zmienił — wtedy decyzja PO
-i rewizja `KONTRAKT-BRAIN-MASZYNOWNIA.md`, nigdy ciche wyłączenie testu.
+i rewizja kontraktu, nigdy ciche wyłączenie testu.
 
 ## Bramki
 
@@ -48,6 +61,7 @@ i rewizja `KONTRAKT-BRAIN-MASZYNOWNIA.md`, nigdy ciche wyłączenie testu.
 | ruff + mypy **baseline 0** + pytest, `--frozen` | `scripts/hooks/pre-push` + `ci.yml` | blokuje push i merge |
 | Main zawsze zielony | ruleset GitHub | `push declined due to repository rule violations` |
 | Granica kontraktu | `test_granica_kontraktu.py` | czerwony test |
+| Brak danych prywatnych | `test_brak_wyciekow.py` (hook **zawsze** + CI) | blokuje push i merge |
 
 Instalacja hooka po klonie: `ln -sf ../../scripts/hooks/pre-push .git/hooks/pre-push`
 
@@ -63,12 +77,12 @@ tutaj nie ma czego schodzić, więc podniesienie progu wymaga jawnej decyzji, ni
 - **Potem** A1: montaż kontekstu (4 źródła), `session_id` per wątek-dzień, rotacja, `--resume`.
   Uwaga: `--resume` i `session_id` **nie istnieją w kodzie maszynowni** (grep bez trafień) —
   budujemy od zera, nie rozszerzamy.
-- **Flip na prod = osobne GO PO** po bramce A0 (dowody + tydzień shadow + audyt nadzoru).
-  Całe to repo jest nową powierzchnią w sekwencji C-line; licznik naruszeń = 3, czwartego nie ma.
+- **Flip na prod = osobne GO PO** po bramce A0 (dowody + tydzień shadow + niezależny audyt).
+  Całe to repo jest nową powierzchnią, więc pierwszy flip nie odbywa się bez audytu.
 
 ## Czego tu świadomie NIE ma
 
-- **Deployu.** `assistant-v2/scripts/deploy_mini.sh` jest zahardkodowany na maszynownię
-  i przy wariancie A nie potrzebuje zmian: `uv sync --frozen` dociąga pin sam.
+- **Deployu.** Skrypt deployu maszynowni jest zahardkodowany na nią i przy wariancie A
+  nie potrzebuje zmian: `uv sync --frozen` dociąga pin sam.
 - **Orkiestry subagentów** w hot-path (B4) i **heartbeatu** (B2).
 - **Limitu LOC.** Powstanie po pierwszym pilocie, z realnego kodu — nie z sufitu.

@@ -2,14 +2,14 @@
 # pre-push: lokalna bramka jakosci PRZED push na origin (wersjonowana kopia kanoniczna).
 # INSTALACJA (po clone): ln -sf ../../scripts/hooks/pre-push .git/hooks/pre-push
 #
-# Wzorzec 1:1 z assistant-v2, z trzema roznicami wynikajacymi z tego, ze repo startuje czyste:
+# Wzorzec 1:1 z maszynowni, z trzema roznicami wynikajacymi z tego, ze repo startuje czyste:
 #   - MYPY_BASELINE=0 (maszynownia ma 34; tutaj kazdy blad typow jest NOWY)
 #   - brak M1/M1-lite (plan-delta per modul) — brain nie ma jeszcze modelu dwoch torow
 #   - warstwowosc dokumentacyjna ZOSTAJE (lekcja 09.08: bramka blokujaca dopisek do .md
 #     uczy uzywania `--no-verify`, czyli daje ZERO kontroli zamiast proporcjonalnej)
 #
 # Bramka biegnie na TYM SAMYM locku co CI (uv + --frozen). Bez tego wraca klasa
-# "zielono lokalnie, czerwono w CI" (assistant-v2, main czerwony 29-30.07).
+# "zielono lokalnie, czerwono w CI" (maszynownia, main czerwony przez doby).
 set -uo pipefail
 
 REPO="$(git rev-parse --show-toplevel)" || exit 0
@@ -25,6 +25,7 @@ fi
 RUN="$UV run --frozen"
 MYPY_BASELINE=0
 LOG="/tmp/brain-prepush-pytest.log"
+LOG_WYCIEK="/tmp/brain-prepush-wyciek.log"
 red(){ printf '\033[31m%s\033[0m\n' "$1"; }
 grn(){ printf '\033[32m%s\033[0m\n' "$1"; }
 
@@ -93,6 +94,21 @@ else
   fi
   grn "v mypy $CNT <= baseline $MYPY_BASELINE"
 fi
+
+# 3b) SKAN WYCIEKOW — BIEGNIE ZAWSZE, TAKZE PRZY DOC_ONLY.
+#     Swiadomie POZA warstwowoscia dokumentacyjna z kroku 0: to repo jest publiczne,
+#     jego konsument nie jest, a najbardziej prawdopodobny nosnik PII to wlasnie .md
+#     (wklejony fragment notatki, sciezka z terminala, nazwa klienta w przykladzie).
+#     Bramka pomijana dla dokumentacji byla wiec bramka wylaczona dokladnie tam, gdzie
+#     jest potrzebna. Kosztuje ~0.05 s, wiec nie ma czego oszczedzac.
+echo "> pre-push: skan wyciekow (zawsze, takze dla samej dokumentacji)"
+if ! $RUN pytest tests/test_brak_wyciekow.py -q >"$LOG_WYCIEK" 2>&1; then
+  red "x SKAN WYCIEKOW CZERWONY -> push WSTRZYMANY."
+  tail -20 "$LOG_WYCIEK"
+  red "To repo jest PUBLICZNE. Usun dane, nie obchodz bramki."
+  exit 1
+fi
+grn "v brak wyciekow"
 
 # 4) PYTEST (twardy blok, zero retry — lekcja F-0709-1)
 if [ "$DOC_ONLY" = "1" ]; then

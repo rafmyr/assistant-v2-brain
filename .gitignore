@@ -16,6 +16,6 @@ dist/
 .DS_Store
 
 # UWAGA: `uv.lock` JEST W REPO SWIADOMIE.
-# W assistant-v2 lock siedzial w .gitignore i to bylo zrodlo 3 dob czerwonego maina
-# (29.07-01.08): trzy srodowiska, trzy wersje zaleznosci, zero zapisu. Lock to jedyne
+# W maszynowni lock siedzial w .gitignore i to bylo zrodlo dob czerwonego maina
+# trzy srodowiska, trzy wersje zaleznosci, zero zapisu. Lock to jedyne
 # zrodlo prawdy o wersjach — nie wpisuj go tutaj.
